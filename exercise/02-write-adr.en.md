@@ -33,10 +33,10 @@ requirement: <paste R-12 here>
 
 | Criterion | Run a | Run b |
 |---|---|---|
-| Uses the scenario's numbers (latency, peak, MailFast limits)? | | |
-| Options considered (list them) | | |
-| Handles "exactly once" loyalty points and MailFast's rate limit? How? | | |
-| Anything invented (a number, tool or fact not in the scenario)? | | |
+| Uses the scenario's numbers (latency, peak, MailFast limits)? | No. It names no number and lists "latency target, peak orders/s, MailFast limits" under Open questions. (It is not a clean zero-shot: the agent had seen the numbers table, but kept them out.) | Yes: p95 ≤ 500 ms (about 300 ms today), 200 orders/s, MailFast p95 1.5 s / 0.5 % failures / 50 emails/s, loyalty within 1 minute. It computes that MailFast's 1.5 s alone is three times the latency budget and that 200/s is 4× the 50/s limit. |
+| Options considered (list them) | 1. Synchronous calls; 2. Message broker with `OrderPlaced` event; 3. In-process or DB-backed job queue | 1. Synchronous gRPC; 2. Goroutine fire-and-forget; 3. RabbitMQ; 4. Kafka |
+| Handles "exactly once" loyalty points and MailFast's rate limit? How? | Partly. Loyalty: idempotent consumer by order id. MailFast: only "retries with backoff and a dead-letter queue", because the limit is unknown. No rate limiting. | Yes. Loyalty: unique constraint on `order_id`. MailFast: a separate email queue consumed at a fixed rate below 50/s, retries with backoff, dead-letter queue; separate queues so the email backlog cannot delay loyalty. |
+| Anything invented (a number, tool or fact not in the scenario)? | No numbers. But it recommends a "transactional outbox" without noticing that no order store exists, and picks "a broker" without a product. | A few assumptions, mostly flagged: a 10-minute peak (marked as assumption), "a few ms" publish cost (unmeasured), 40/s email rate (a design choice). It also says no one on the team is noted as knowing Kafka (labelled "Not evidenced"). It found a real fact from `main.go` that Run a could not: `checkoutservice` has no database or order store. |
 
 ## Take ownership: your final ADR
 
@@ -49,6 +49,6 @@ You will defend this ADR in front of a review board in Part B, so make sure you 
 
 | # | What you changed from the AI's draft | Why |
 |---|---|---|
-| 1 | | |
-| 2 | | |
-| 3 | | |
+| 1 | Deciders: set to the student architect, reviewed by the group's board. Added an "Out of scope" paragraph (loyalty reversal on refunds, adding a durable order store, the future SMS / fraud / recommendation consumers). | The draft said "not given" and mixed open questions with things that this decision does not try to solve. A board needs to know what it is **not** being asked to approve. |
+| 2 | Email consumer: fixed rate 40/s (not just "below 50/s"), dead-letter after 5 failures, and a record of already-sent `order_id`s kept by the consumer to avoid duplicate emails. Analytics: at-most-once accepted. | MailFast's idempotency is unknown, so I won't rely on it. 40/s leaves 20 % headroom for retries under the 50/s limit. A lost analytics event is less harmful than slowing checkout, so I don't pay for exactly-once there. |
+| 3 | Lost-event risk: replaced "log it" with a concrete policy: 200 ms publish timeout + 1 retry, return the order anyway, log `order_event_unpublished` with the order id and payment transaction id, metric + alert on any non-zero count, manual replay from the payment record. The outbox is a stated follow-up. | `checkoutservice` has no database, so an outbox would add a new store, which is a bigger decision than this ADR. The draft hid this gap behind "log it"; my version says clearly that between charge and publish we can lose an event and how operations will notice. |

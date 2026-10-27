@@ -17,4 +17,4 @@ The agent writes a one-page ATAM-style review to [`outputs/3-review.md`](outputs
 
 **Don't act on the review yet.** Read it, commit it, and bring it to the review board in Part B. The board will decide which of its findings matter.
 
-- **My first impression of the AI's review** (one sentence): …
+- **My first impression of the AI's review** (one sentence): It is clear and well structured, and it correctly finds the "lost event between charge and publish" risk, but it mostly restates problems the ADR already admits in its own Open questions, and I doubt it could catch what only the people running the system (operations, business) know.
